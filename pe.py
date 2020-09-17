@@ -14,11 +14,12 @@ import corner
 detectorlist = ['H1','L1', 'V1']
 
 # Title the app
-st.title('Gravitational Wave Parameter Viewer')
+st.title('Gravitational Wave Source Parameter Viewer')
 
 st.markdown("""
- * Use the controls at left to select data
- * Learn more at https://gw-openscience.org
+ * Use the menu at left to select data
+ * Plots will appear below
+ * Currently only works with events from GWTC-1
 """)
 
 #-- Make data directory, if needed
@@ -27,7 +28,7 @@ if not os.path.exists('./data'):
 
 @st.cache   #-- Magic command to cache data
 def load_gw(t0, detector):
-    strain = TimeSeries.fetch_open_data(detector, t0-16, t0+16, cache=False)
+    strain = TimeSeries.fetch_open_data(detector, t0-14, t0+14, cache=False)
     return strain
 
 @st.cache
