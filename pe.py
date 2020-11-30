@@ -54,7 +54,7 @@ def load_pe(url):
                 break
         except:
             tries += 1
-            data.close()
+            #data.close()
             # -- Download PE file
             r = requests.get(url, allow_redirects=True)
             with open(fn, 'wb') as newfile:
