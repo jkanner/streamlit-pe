@@ -163,21 +163,18 @@ m1 = pedata['m1_detector_frame_Msun']
 m2 = pedata['m2_detector_frame_Msun']
 
 corner_data = np.array(list(zip(m1, m2))) 
-corner.corner(corner_data, labels=[r'$m_1 ~($M$_\odot)$', r'$m_2 ~($M$_\odot)$'], color='dodgerblue')
-st.pyplot()
+cfig = corner.corner(corner_data, labels=[r'$m_1 ~($M$_\odot)$', r'$m_2 ~($M$_\odot)$'], color='dodgerblue')
+st.pyplot(cfig, clear_figure=True)
 
 for param in paramlist:
 
-    plt.figure()
+    pfig = plt.figure()
     plt.hist(pedata[param], bins=50, density=True)
     plt.xlabel(param)
-    st.pyplot()
+    st.pyplot(pfig, clear_figure=True)
     plt.close('all')
     
     
-
-
-
 st.subheader("About this app")
 st.markdown("""
 This app displays data from LIGO, Virgo, and GEO downloaded from
