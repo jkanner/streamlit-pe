@@ -1,3 +1,15 @@
+
+# -- Use agg backend for matplotlib
+import matplotlib as mpl
+mpl.use("agg")
+
+# -- Import lock feature
+from matplotlib.backends.backend_agg import RendererAgg
+lock = RendererAgg.lock
+
+import altair as alt
+import pandas as pd
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,6 +21,7 @@ from gwosc.locate import get_urls
 from gwosc import datasets
 from gwosc.api import fetch_event_json
 import corner
+import io
 
 # -- Default detector list
 detectorlist = ['H1','L1', 'V1']
@@ -34,34 +47,26 @@ def load_gw(t0, detector):
 @st.cache
 def load_pe(url):
 
-    # -- Try to read PE samples from disk
-    # -- If not available, download
-    
-    # -- Get file name
-    fn = 'data/' + os.path.split(url)[1]
-    tries = 0 
-    while tries < 3:
-        try:
-            data = h5py.File(fn)
-            key0 = list(data.keys())[0]
-            try:
-                dataarray = data['Overall_posterior'][()]
-                waveform = 'Overall_posterior'
-                break
-            except:
-                dataarray = data[key0][()]
-                waveform = key0
-                break
-        except:
-            tries += 1
-            #data.close()
-            # -- Download PE file
-            r = requests.get(url, allow_redirects=True)
-            with open(fn, 'wb') as newfile:
-                newfile.write(r.content)
-            
-    data.close()
+    # -- Open virtual file
+    virtualfile = io.BytesIO() 
+
+    # -- Download pe file
+    r = requests.get(url, allow_redirects=True)
+    virtualfile.write(r.content)
+
+    #-- Access file with h5py
+    data = h5py.File(virtualfile)
+    key0 = list(data.keys())[0]
+    try:
+        dataarray = data['Overall_posterior'][()]
+        waveform = 'Overall_posterior'
+    except:
+        dataarray = data[key0][()]
+        waveform = key0
+
     return dataarray, waveform
+
+
 
 
 st.sidebar.markdown("## Select Data Time and Detector")
@@ -108,9 +113,11 @@ strain = strain.crop(center-16, center+16)
 # -- Whiten and bandpass data
 st.subheader('Whitened and Bandbassed Data')
 white_data = strain.whiten()
-bp_data = white_data.bandpass(30, 400)
-fig3 = bp_data.crop(cropstart, cropend).plot()
-st.pyplot(fig3, clear_figure=True)
+
+with lock:
+    bp_data = white_data.bandpass(30, 400)
+    fig3 = bp_data.crop(cropstart, cropend).plot()
+    st.pyplot(fig3, clear_figure=True)
 
 # -- Make a Q-transform
 st.subheader('Q-transform')
@@ -125,13 +132,15 @@ qrange = (int(qcenter*0.8), int(qcenter*1.2))
 
 
 hq = strain.q_transform(outseg=(t0-dt, t0+dt), qrange=qrange)
-fig4 = hq.plot()
-ax = fig4.gca()
-fig4.colorbar(label="Normalised energy", vmax=vmax, vmin=0)
-ax.grid(False)
-ax.set_yscale('log')
-ax.set_ylim(bottom=15)
-st.pyplot(fig4, clear_figure=True)
+
+with lock:
+    fig4 = hq.plot()
+    ax = fig4.gca()
+    fig4.colorbar(label="Normalised energy", vmax=vmax, vmin=0)
+    ax.grid(False)
+    ax.set_yscale('log')
+    ax.set_ylim(bottom=15)
+    st.pyplot(fig4, clear_figure=True)
 
 
 #-- Try getting pe url
@@ -162,18 +171,30 @@ m_names = ['m1_detector_frame_Msun', 'm2_detector_frame_Msun']
 m1 = pedata['m1_detector_frame_Msun']
 m2 = pedata['m2_detector_frame_Msun']
 
-corner_data = np.array(list(zip(m1, m2))) 
-cfig = corner.corner(corner_data, labels=[r'$m_1 ~($M$_\odot)$', r'$m_2 ~($M$_\odot)$'], color='dodgerblue')
-st.pyplot(cfig, clear_figure=True)
+corner_data = np.array(list(zip(m1, m2)))
+
+with lock:
+    cfig = corner.corner(corner_data, labels=[r'$m_1 ~($M$_\odot)$', r'$m_2 ~($M$_\odot)$'], color='dodgerblue')
+    st.pyplot(cfig, clear_figure=True)
 
 for param in paramlist:
 
-    pfig = plt.figure()
-    plt.hist(pedata[param], bins=50, density=True)
-    plt.xlabel(param)
-    st.pyplot(pfig, clear_figure=True)
-    plt.close('all')
+    value, bins = np.histogram(pedata[param], bins=50, density=True)
+
+    source = pd.DataFrame({
+            param: bins[1:],
+            'density': value,
+        })
     
+    chart = alt.Chart(source).mark_area(
+        opacity=0.8,
+        interpolate='step'
+    ).encode(
+        alt.X(param),
+        alt.Y('density'))
+
+    st.altair_chart(chart, use_container_width=True)
+
     
 st.subheader("About this app")
 st.markdown("""
